@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 
 	"github.com/hashicorp/packer/helper/flag-kv"
 	"github.com/hashicorp/packer/helper/flag-slice"
@@ -29,8 +30,6 @@ type Meta struct {
 	Cache      packer.Cache
 	Ui         packer.Ui
 	Version    string
-	//Secrets        []string
-	//secrets:        []string{"matt"},
 
 	// These are set by command-line flags
 	flagBuildExcept []string
