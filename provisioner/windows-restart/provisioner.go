@@ -17,10 +17,10 @@ import (
 	"github.com/masterzen/winrm"
 )
 
-var DefaultRestartCommand = "shutdown /r /f /t 0 /c \"packer restart\""
+var DefaultRestartCommand = `shutdown /r /f /t 0 /c "packer restart"`
 var DefaultRestartCheckCommand = winrm.Powershell(`echo "${env:COMPUTERNAME} restarted."`)
 var retryableSleep = 5 * time.Second
-var TryCheckReboot = "shutdown.exe -f -r -t 60"
+var TryCheckReboot = `shutdown.exe -f -r -t 60`
 var AbortReboot = "shutdown.exe -a"
 
 type Config struct {
@@ -124,12 +124,16 @@ var waitForRestart = func(p *Provisioner, comm packer.Communicator) error {
 	for {
 		log.Printf("Check if machine is rebooting...")
 		cmd = &packer.RemoteCmd{Command: trycommand}
-		err = cmd.StartWithUi(comm, ui)
-		if err != nil {
+		if err := p.comm.Start(cmd); err != nil {
 			// Couldn't execute, we assume machine is rebooting already
 			break
 		}
-
+		cmd.Wait()
+		if cmd.ExitStatus == 1 {
+			// SSH provisioner, and we're already rebooting. SSH can reconnect
+			// without our help; exit this wait loop.
+			break
+		}
 		if cmd.ExitStatus == 1115 || cmd.ExitStatus == 1190 {
 			// Reboot already in progress but not completed
 			log.Printf("Reboot already in progress, waiting...")
@@ -138,7 +142,10 @@ var waitForRestart = func(p *Provisioner, comm packer.Communicator) error {
 		if cmd.ExitStatus == 0 {
 			// Cancel reboot we created to test if machine was already rebooting
 			cmd = &packer.RemoteCmd{Command: abortcommand}
-			cmd.StartWithUi(comm, ui)
+			if err := p.comm.Start(cmd); err != nil {
+				return err
+			}
+			cmd.Wait()
 			break
 		}
 	}
